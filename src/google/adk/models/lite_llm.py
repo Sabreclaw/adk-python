@@ -252,8 +252,8 @@ def _get_content(
       data_uri = f"data:{part.inline_data.mime_type};base64,{base64_string}"
 
       if part.inline_data.mime_type.startswith("image"):
-        # Extract format from mime type (e.g., "image/png" -> "png")
-        format_type = part.inline_data.mime_type.split("/")[-1]
+        # Use full MIME type (e.g., "image/png") for providers that validate it
+        format_type = part.inline_data.mime_type
         content_objects.append(
             ChatCompletionImageObject(
                 type="image_url",
@@ -263,8 +263,8 @@ def _get_content(
             )
         )
       elif part.inline_data.mime_type.startswith("video"):
-        # Extract format from mime type (e.g., "video/mp4" -> "mp4")
-        format_type = part.inline_data.mime_type.split("/")[-1]
+        # Use full MIME type (e.g., "video/mp4") for providers that validate it
+        format_type = part.inline_data.mime_type
         content_objects.append(
             ChatCompletionVideoObject(
                 type="video_url",
@@ -276,7 +276,8 @@ def _get_content(
       elif part.inline_data.mime_type == "application/pdf":
         content_objects.append(
             ChatCompletionFileObject(
-                type="file", file={"file_data": data_uri, "format": "pdf"}
+                type="file",
+                file={"file_data": data_uri, "format": "application/pdf"},
             )
         )
       else:
