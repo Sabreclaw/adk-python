@@ -25,6 +25,7 @@ from ..auth.auth_tool import AuthConfig
 if TYPE_CHECKING:
   from ..agents.invocation_context import InvocationContext
   from ..events.event_actions import EventActions
+  from ..events.event_actions import InputConfig
   from ..memory.base_memory_service import SearchMemoryResponse
 
 
@@ -43,6 +44,7 @@ class ToolContext(CallbackContext):
       If LLM didn't return this id, ADK will assign one to it. This id is used
       to map function call response to the original function call.
     event_actions: The event actions of the current tool call.
+    input_config: The input config of the current tool call.
   """
 
   def __init__(
@@ -51,9 +53,11 @@ class ToolContext(CallbackContext):
       *,
       function_call_id: Optional[str] = None,
       event_actions: Optional[EventActions] = None,
+      input_config: Optional[InputConfig] = None,
   ):
     super().__init__(invocation_context, event_actions=event_actions)
     self.function_call_id = function_call_id
+    self.input_config = input_config
 
   @property
   def actions(self) -> EventActions:
@@ -68,6 +72,13 @@ class ToolContext(CallbackContext):
 
   def get_auth_response(self, auth_config: AuthConfig) -> AuthCredential:
     return AuthHandler(auth_config).get_auth_response(self.state)
+
+  def request_input(self, input_config: InputConfig) -> None:
+    if not self.function_call_id:
+      raise ValueError('function_call_id is not set.')
+    self._event_actions.requested_input_configs[self.function_call_id] = (
+        input_config
+    )
 
   async def search_memory(self, query: str) -> SearchMemoryResponse:
     """Searches the memory of the current user."""

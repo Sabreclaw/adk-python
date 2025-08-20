@@ -14,13 +14,51 @@
 
 from __future__ import annotations
 
+from typing import Any
 from typing import Optional
 
+from pydantic import alias_generators
 from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 
 from ..utils.feature_decorator import experimental
+
+
+@experimental
+class InputConfig(BaseModel):
+  """Represents an input configuration."""
+
+  model_config = ConfigDict(
+      extra="forbid",
+      alias_generator=alias_generators.to_camel,
+      populate_by_name=True,
+  )
+  """The pydantic model config."""
+
+  text_input: str = ""
+  """The text input."""
+  data_input: Optional[Any] = None
+  """The data input."""
+
+
+@experimental
+class InputToolArguments(BaseModel):
+  """The arguments for the input tool that is used to request input from the
+  user.
+  """
+
+  model_config = ConfigDict(
+      extra="forbid",
+      alias_generator=alias_generators.to_camel,
+      populate_by_name=True,
+  )
+
+  original_function_call_id: str
+  """The function call id."""
+
+  input_config: InputConfig
+  """The requested input config."""
 
 
 @experimental

@@ -638,6 +638,12 @@ class BaseLlmFlow(ABC):
       if auth_event:
         yield auth_event
 
+      input_event = functions.generate_input_event(
+          invocation_context, function_response_event
+      )
+      if input_event:
+        yield input_event
+
       # Always yield the function response event first
       yield function_response_event
 

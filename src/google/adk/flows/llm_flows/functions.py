@@ -39,6 +39,8 @@ from ...telemetry import trace_merged_tool_calls
 from ...telemetry import trace_tool_call
 from ...telemetry import tracer
 from ...tools.base_tool import BaseTool
+from ...tools.tool_configs import InputConfig
+from ...tools.tool_configs import InputToolArguments
 from ...tools.tool_context import ToolContext
 from ...utils.context_utils import Aclosing
 
@@ -47,6 +49,7 @@ if TYPE_CHECKING:
 
 AF_FUNCTION_CALL_ID_PREFIX = 'adk-'
 REQUEST_EUC_FUNCTION_CALL_NAME = 'adk_request_credential'
+REQUEST_INPUT_FUNCTION_CALL_NAME = 'adk_request_input'
 
 logger = logging.getLogger('google_adk.' + __name__)
 
@@ -130,11 +133,47 @@ def generate_auth_event(
   )
 
 
+def generate_input_event(
+    invocation_context: InvocationContext,
+    function_response_event: Event,
+) -> Optional[Event]:
+  if not function_response_event.actions.requested_input_configs:
+    return None
+  parts = []
+  long_running_tool_ids = set()
+  for (
+      function_call_id,
+      input_config,
+  ) in function_response_event.actions.requested_input_configs.items():
+
+    request_input_function_call = types.FunctionCall(
+        name=REQUEST_INPUT_FUNCTION_CALL_NAME,
+        args=InputToolArguments(
+            original_function_call_id=function_call_id,
+            input_config=input_config,
+        ).model_dump(exclude_none=True, by_alias=True),
+    )
+    request_input_function_call.id = generate_client_function_call_id()
+    long_running_tool_ids.add(request_input_function_call.id)
+    parts.append(types.Part(function_call=request_input_function_call))
+
+  return Event(
+      invocation_id=invocation_context.invocation_id,
+      author=invocation_context.agent.name,
+      branch=invocation_context.branch,
+      content=types.Content(
+          parts=parts, role=function_response_event.content.role
+      ),
+      long_running_tool_ids=long_running_tool_ids,
+  )
+
+
 async def handle_function_calls_async(
     invocation_context: InvocationContext,
     function_call_event: Event,
     tools_dict: dict[str, BaseTool],
     filters: Optional[set[str]] = None,
+    input_configs_dict: Optional[dict[str, InputConfig]] = None,
 ) -> Optional[Event]:
   """Calls the functions and returns the function response event."""
   from ...agents.llm_agent import LlmAgent
@@ -161,6 +200,9 @@ async def handle_function_calls_async(
               function_call,
               tools_dict,
               agent,
+              input_configs_dict[function_call.id]
+              if input_configs_dict
+              else None,
           )
       )
       for function_call in filtered_calls
@@ -198,12 +240,14 @@ async def _execute_single_function_call_async(
     function_call: types.FunctionCall,
     tools_dict: dict[str, BaseTool],
     agent: LlmAgent,
+    input_config: Optional[InputConfig] = None,
 ) -> Optional[Event]:
   """Execute a single function call with thread safety for state modifications."""
   tool, tool_context = _get_tool_and_context(
       invocation_context,
       function_call,
       tools_dict,
+      input_config,
   )
 
   with tracer.start_as_current_span(f'execute_tool {tool.name}'):
@@ -567,6 +611,7 @@ def _get_tool_and_context(
     invocation_context: InvocationContext,
     function_call: types.FunctionCall,
     tools_dict: dict[str, BaseTool],
+    input_config: Optional[InputConfig] = None,
 ):
   if function_call.name not in tools_dict:
     raise ValueError(
@@ -576,6 +621,7 @@ def _get_tool_and_context(
   tool_context = ToolContext(
       invocation_context=invocation_context,
       function_call_id=function_call.id,
+      input_config=input_config,
   )
 
   tool = tools_dict[function_call.name]

@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from typing import Optional
 
 from pydantic import alias_generators
@@ -22,6 +23,7 @@ from pydantic import ConfigDict
 from pydantic import Field
 
 from ..auth.auth_tool import AuthConfig
+from ..tools.tool_configs import InputConfig
 
 
 class EventActions(BaseModel):
@@ -64,3 +66,6 @@ class EventActions(BaseModel):
   identify the function call.
   - Values: The requested auth config.
   """
+
+  requested_input_configs: dict[str, InputConfig] = Field(default_factory=dict)
+  """Input configurations requested by tool responses. """
