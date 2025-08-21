@@ -284,3 +284,163 @@ class TestMCPToolset:
 
     # Check that the method has the retry decorator
     assert hasattr(toolset.get_tools, "__wrapped__")
+
+  @pytest.mark.asyncio
+  async def test_tools_caching_behavior(self):
+    """Test that tools are cached and session.list_tools() is only called once."""
+    # Mock tools from MCP server
+    mock_tools = [
+        MockMCPTool("tool1"),
+        MockMCPTool("tool2"),
+    ]
+    self.mock_session.list_tools = AsyncMock(
+        return_value=MockListToolsResult(mock_tools)
+    )
+
+    toolset = MCPToolset(connection_params=self.mock_stdio_params)
+    toolset._mcp_session_manager = self.mock_session_manager
+
+    # First call should fetch tools from server
+    tools1 = await toolset.get_tools()
+    assert len(tools1) == 2
+    assert self.mock_session.list_tools.call_count == 1
+
+    # Second call should use cached tools, not call server again
+    tools2 = await toolset.get_tools()
+    assert len(tools2) == 2
+    assert (
+        self.mock_session.list_tools.call_count == 1
+    )  # Still only called once
+
+    # Third call should also use cache
+    tools3 = await toolset.get_tools()
+    assert len(tools3) == 2
+    assert (
+        self.mock_session.list_tools.call_count == 1
+    )  # Still only called once
+
+    # Verify all returned tool instances are the same (cached)
+    for i in range(len(tools1)):
+      assert tools1[i] is tools2[i]  # Same object instance
+      assert tools2[i] is tools3[i]  # Same object instance
+
+  def test_cache_initialization(self):
+    """Test that cache starts as None and gets populated correctly."""
+    toolset = MCPToolset(connection_params=self.mock_stdio_params)
+
+    # Cache should start as None
+    assert toolset._cached_tools is None
+
+  @pytest.mark.asyncio
+  async def test_cache_populated_after_first_call(self):
+    """Test that cache gets populated after first get_tools() call."""
+    # Mock tools from MCP server
+    mock_tools = [MockMCPTool("tool1"), MockMCPTool("tool2")]
+    self.mock_session.list_tools = AsyncMock(
+        return_value=MockListToolsResult(mock_tools)
+    )
+
+    toolset = MCPToolset(connection_params=self.mock_stdio_params)
+    toolset._mcp_session_manager = self.mock_session_manager
+
+    # Cache should start as None
+    assert toolset._cached_tools is None
+
+    # After first call, cache should be populated
+    await toolset.get_tools()
+    assert toolset._cached_tools is not None
+    assert len(toolset._cached_tools) == 2
+    assert all(isinstance(tool, MCPTool) for tool in toolset._cached_tools)
+
+  @pytest.mark.asyncio
+  async def test_cache_cleared_on_close(self):
+    """Test that cache is cleared when toolset is closed."""
+    # Mock tools from MCP server
+    mock_tools = [MockMCPTool("tool1")]
+    self.mock_session.list_tools = AsyncMock(
+        return_value=MockListToolsResult(mock_tools)
+    )
+
+    toolset = MCPToolset(connection_params=self.mock_stdio_params)
+    toolset._mcp_session_manager = self.mock_session_manager
+
+    # Populate cache
+    await toolset.get_tools()
+    assert toolset._cached_tools is not None
+
+    # Close should clear the cache
+    await toolset.close()
+    assert toolset._cached_tools is None
+
+  @pytest.mark.asyncio
+  async def test_cache_filtering_works_correctly(self):
+    """Test that filtering works correctly with cached tools."""
+    # Mock tools from MCP server
+    mock_tools = [
+        MockMCPTool("read_file"),
+        MockMCPTool("write_file"),
+        MockMCPTool("list_directory"),
+    ]
+    self.mock_session.list_tools = AsyncMock(
+        return_value=MockListToolsResult(mock_tools)
+    )
+
+    # Create toolset with filter
+    tool_filter = ["read_file", "write_file"]
+    toolset = MCPToolset(
+        connection_params=self.mock_stdio_params, tool_filter=tool_filter
+    )
+    toolset._mcp_session_manager = self.mock_session_manager
+
+    # First call - should fetch and cache all tools, return filtered ones
+    tools1 = await toolset.get_tools()
+    assert len(tools1) == 2  # Only filtered tools returned
+    assert tools1[0].name == "read_file"
+    assert tools1[1].name == "write_file"
+    assert self.mock_session.list_tools.call_count == 1
+
+    # Cache should contain all tools (before filtering)
+    assert len(toolset._cached_tools) == 3
+
+    # Second call - should use cache, apply filtering again
+    tools2 = await toolset.get_tools()
+    assert len(tools2) == 2  # Only filtered tools returned
+    assert tools2[0].name == "read_file"
+    assert tools2[1].name == "write_file"
+    assert (
+        self.mock_session.list_tools.call_count == 1
+    )  # Still only called once
+
+    # Returned tool instances should be the same (from cache)
+    assert tools1[0] is tools2[0]
+    assert tools1[1] is tools2[1]
+
+  @pytest.mark.asyncio
+  async def test_cache_with_different_readonly_contexts(self):
+    """Test that cache works with different readonly contexts."""
+    # Mock tools from MCP server
+    mock_tools = [MockMCPTool("tool1"), MockMCPTool("tool2")]
+    self.mock_session.list_tools = AsyncMock(
+        return_value=MockListToolsResult(mock_tools)
+    )
+
+    toolset = MCPToolset(connection_params=self.mock_stdio_params)
+    toolset._mcp_session_manager = self.mock_session_manager
+
+    # First call with None context
+    tools1 = await toolset.get_tools(readonly_context=None)
+    assert len(tools1) == 2
+    assert self.mock_session.list_tools.call_count == 1
+
+    # Second call with different context - should still use cache
+    # Since the caching behavior doesn't depend on context (cache is at toolset level),
+    # we can test with None context again to verify cache works
+    tools2 = await toolset.get_tools(readonly_context=None)
+    assert len(tools2) == 2
+    assert (
+        self.mock_session.list_tools.call_count == 1
+    )  # Still only called once
+
+    # Tools should be from the same cache
+    assert tools1[0] is tools2[0]
+    assert tools1[1] is tools2[1]

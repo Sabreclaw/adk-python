@@ -137,6 +137,9 @@ class MCPToolset(BaseToolset):
     self._auth_scheme = auth_scheme
     self._auth_credential = auth_credential
 
+    # Cache for tools to avoid repeated session.list_tools() calls
+    self._cached_tools: Optional[List[BaseTool]] = None
+
   @retry_on_closed_resource
   async def get_tools(
       self,
@@ -151,24 +154,30 @@ class MCPToolset(BaseToolset):
     Returns:
         List[BaseTool]: A list of tools available under the specified context.
     """
-    # Get session from session manager
-    session = await self._mcp_session_manager.create_session()
+    # Use cached tools if available, otherwise fetch and cache them
+    if self._cached_tools is None:
+      # Get session from session manager
+      session = await self._mcp_session_manager.create_session()
 
-    # Fetch available tools from the MCP server
-    tools_response: ListToolsResult = await session.list_tools()
+      # Fetch available tools from the MCP server
+      tools_response: ListToolsResult = await session.list_tools()
+
+      # Create MCPTool instances for all tools and cache them
+      self._cached_tools = []
+      for tool in tools_response.tools:
+        mcp_tool = MCPTool(
+            mcp_tool=tool,
+            mcp_session_manager=self._mcp_session_manager,
+            auth_scheme=self._auth_scheme,
+            auth_credential=self._auth_credential,
+        )
+        self._cached_tools.append(mcp_tool)
 
     # Apply filtering based on context and tool_filter
     tools = []
-    for tool in tools_response.tools:
-      mcp_tool = MCPTool(
-          mcp_tool=tool,
-          mcp_session_manager=self._mcp_session_manager,
-          auth_scheme=self._auth_scheme,
-          auth_credential=self._auth_credential,
-      )
-
-      if self._is_tool_selected(mcp_tool, readonly_context):
-        tools.append(mcp_tool)
+    for tool in self._cached_tools:
+      if self._is_tool_selected(tool, readonly_context):
+        tools.append(tool)
     return tools
 
   async def close(self) -> None:
@@ -180,6 +189,8 @@ class MCPToolset(BaseToolset):
     """
     try:
       await self._mcp_session_manager.close()
+      # Clear the cached tools when closing
+      self._cached_tools = None
     except Exception as e:
       # Log the error but don't re-raise to avoid blocking shutdown
       print(f"Warning: Error during MCPToolset cleanup: {e}", file=self._errlog)
