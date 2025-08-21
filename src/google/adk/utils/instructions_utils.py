@@ -105,7 +105,43 @@ async def inject_session_state(
         else:
           raise KeyError(f'Context variable not found: `{var_name}`.')
 
-  return await _async_sub(r'{+[^{}]*}+', _replace_match, template)
+  # ESCAPE MECHANISM: Double-brace escaping for literal braces in instructions
+  #
+  # This implements a common templating escape pattern where double braces
+  # become literal single braces, allowing users to include JSON, code, or
+  # other brace-containing content in instruction templates.
+  #
+  # Processing order (CRITICAL - order matters!):
+  # 1. First, escape double braces to avoid template processing
+  # 2. Then, process single braces as template variables
+  # 3. Finally, restore escaped braces as literals
+  #
+  # Example transformations:
+  #   Input:    'Use {name} with config {{"type": "llm"}}'
+  #   Step 1:   'Use {name} with config PLACEHOLDER'  (escape {{...}})
+  #   Step 2:   'Use Alice with config PLACEHOLDER'   (process {name})
+  #   Step 3:   'Use Alice with config {"type": "llm"}'  (restore literal)
+  #
+  # Why placeholders are needed:
+  # - Direct replacement could interfere with regex pattern matching
+  # - Placeholders ensure clean separation of escaping vs variable processing
+  # - Unique strings prevent accidental collisions with user content
+
+  # Step 1: Replace double braces with unique placeholders
+  escaped_open = '__ADK_ESCAPED_OPEN_BRACE_PLACEHOLDER__'
+  escaped_close = '__ADK_ESCAPED_CLOSE_BRACE_PLACEHOLDER__'
+  template = template.replace('{{', escaped_open)
+  template = template.replace('}}', escaped_close)
+
+  # Step 2: Process single braces for template variables using regex pattern
+  # Pattern r'{+[^{}]*}+' matches {variable_name} but not placeholders
+  result = await _async_sub(r'{+[^{}]*}+', _replace_match, template)
+
+  # Step 3: Restore escaped braces as literal braces in final output
+  result = result.replace(escaped_open, '{')
+  result = result.replace(escaped_close, '}')
+
+  return result
 
 
 def _is_valid_state_name(var_name):

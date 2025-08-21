@@ -1,4 +1,18 @@
-from google.adk.agents.invocation_context import InvocationContext
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 from google.adk.agents.llm_agent import Agent
 from google.adk.agents.readonly_context import ReadonlyContext
 from google.adk.sessions.session import Session
@@ -214,3 +228,41 @@ async def test_inject_session_state_artifact_service_not_initialized_raises_valu
     await instructions_utils.inject_session_state(
         instruction_template, invocation_context
     )
+
+
+@pytest.mark.asyncio
+async def test_inject_session_state_with_double_brace_escaping():
+  """Test that double braces {{}} become literal braces in output."""
+  instruction_template = (
+      "Use {{my_name}} for literal and {my_name} for template variable"
+  )
+  invocation_context = await _create_test_readonly_context(
+      state={"my_name": "Sean"}
+  )
+
+  populated_instruction = await instructions_utils.inject_session_state(
+      instruction_template, invocation_context
+  )
+  assert (
+      populated_instruction
+      == "Use {my_name} for literal and Sean for template variable"
+  )
+
+
+@pytest.mark.asyncio
+async def test_inject_session_state_with_json_literal_braces():
+  """Test that JSON with escaped braces works correctly."""
+  instruction_template = (
+      'Config format: {{"name": "{user_name}", "active": true}}'
+  )
+  invocation_context = await _create_test_readonly_context(
+      state={"user_name": "Alice"}
+  )
+
+  populated_instruction = await instructions_utils.inject_session_state(
+      instruction_template, invocation_context
+  )
+  assert (
+      populated_instruction
+      == 'Config format: {"name": "Alice", "active": true}'
+  )

@@ -53,8 +53,9 @@ async def test_build_system_instruction():
     pass
 
   assert request.config.system_instruction == (
-      """Use the echo_info tool to echo 1234567890, 30, \
-{  non-identifier-float}}, {'key1': 'value1'} and {{'key2': 'value2'}}."""
+      """Use the echo_info tool to echo 1234567890, \
+{customer_int  }, {  non-identifier-float}, \
+{'key1': 'value1'} and {'key2': 'value2'}."""
   )
 
 
