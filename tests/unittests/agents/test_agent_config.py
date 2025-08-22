@@ -20,6 +20,7 @@ from google.adk.agents.llm_agent_config import LlmAgentConfig
 from google.adk.agents.loop_agent_config import LoopAgentConfig
 from google.adk.agents.parallel_agent_config import ParallelAgentConfig
 from google.adk.agents.sequential_agent_config import SequentialAgentConfig
+import pytest
 import yaml
 
 
@@ -40,9 +41,17 @@ tools:
   assert config.root.agent_class == "LlmAgent"
 
 
-def test_agent_config_discriminator_llm_agent():
-  yaml_content = """\
-agent_class: LlmAgent
+@pytest.mark.parametrize(
+    "agent_class_value",
+    [
+        "LlmAgent",
+        "google.adk.agents.LlmAgent",
+        "google.adk.agents.llm_agent.LlmAgent",
+    ],
+)
+def test_agent_config_discriminator_llm_agent(agent_class_value):
+  yaml_content = f"""\
+agent_class: {agent_class_value}
 name: search_agent
 model: gemini-2.0-flash
 description: a sample description
@@ -55,12 +64,20 @@ tools:
   config = AgentConfig.model_validate(config_data)
 
   assert isinstance(config.root, LlmAgentConfig)
-  assert config.root.agent_class == "LlmAgent"
+  assert config.root.agent_class == agent_class_value
 
 
-def test_agent_config_discriminator_loop_agent():
-  yaml_content = """\
-agent_class: LoopAgent
+@pytest.mark.parametrize(
+    "agent_class_value",
+    [
+        "LoopAgent",
+        "google.adk.agents.LoopAgent",
+        "google.adk.agents.loop_agent.LoopAgent",
+    ],
+)
+def test_agent_config_discriminator_loop_agent(agent_class_value):
+  yaml_content = f"""\
+agent_class: {agent_class_value}
 name: CodePipelineAgent
 description: Executes a sequence of code writing, reviewing, and refactoring.
 sub_agents:
@@ -73,12 +90,20 @@ sub_agents:
   config = AgentConfig.model_validate(config_data)
 
   assert isinstance(config.root, LoopAgentConfig)
-  assert config.root.agent_class == "LoopAgent"
+  assert config.root.agent_class == agent_class_value
 
 
-def test_agent_config_discriminator_parallel_agent():
-  yaml_content = """\
-agent_class: ParallelAgent
+@pytest.mark.parametrize(
+    "agent_class_value",
+    [
+        "ParallelAgent",
+        "google.adk.agents.ParallelAgent",
+        "google.adk.agents.parallel_agent.ParallelAgent",
+    ],
+)
+def test_agent_config_discriminator_parallel_agent(agent_class_value):
+  yaml_content = f"""\
+agent_class: {agent_class_value}
 name: CodePipelineAgent
 description: Executes a sequence of code writing, reviewing, and refactoring.
 sub_agents:
@@ -91,12 +116,20 @@ sub_agents:
   config = AgentConfig.model_validate(config_data)
 
   assert isinstance(config.root, ParallelAgentConfig)
-  assert config.root.agent_class == "ParallelAgent"
+  assert config.root.agent_class == agent_class_value
 
 
-def test_agent_config_discriminator_sequential_agent():
-  yaml_content = """\
-agent_class: SequentialAgent
+@pytest.mark.parametrize(
+    "agent_class_value",
+    [
+        "SequentialAgent",
+        "google.adk.agents.SequentialAgent",
+        "google.adk.agents.sequential_agent.SequentialAgent",
+    ],
+)
+def test_agent_config_discriminator_sequential_agent(agent_class_value):
+  yaml_content = f"""\
+agent_class: {agent_class_value}
 name: CodePipelineAgent
 description: Executes a sequence of code writing, reviewing, and refactoring.
 sub_agents:
@@ -109,7 +142,7 @@ sub_agents:
   config = AgentConfig.model_validate(config_data)
 
   assert isinstance(config.root, SequentialAgentConfig)
-  assert config.root.agent_class == "SequentialAgent"
+  assert config.root.agent_class == agent_class_value
 
 
 def test_agent_config_discriminator_custom_agent():
