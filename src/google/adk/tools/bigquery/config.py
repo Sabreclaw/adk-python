@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 from enum import Enum
+from typing import Optional
 
 from pydantic import BaseModel
 
@@ -59,3 +60,10 @@ class BigQueryToolConfig(BaseModel):
   """Maximum number of rows to return from a query.
 
   By default, the query result will be limited to 50 rows."""
+
+  application_name: Optional[str] = None
+  """Name of the application using the BigQuery tools.
+
+  By default, no particular application name will be set in the BigQuery
+  interaction. But if the the tool user (agent builder) wants to differentiate
+  their application for tracing purposes, they can set this field."""
