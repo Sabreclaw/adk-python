@@ -78,9 +78,24 @@ def execute_sql(
           }
   """
   try:
+    # Validate compute project if applicable
+    if (
+        settings.compute_project_id
+        and project_id != settings.compute_project_id
+    ):
+      return {
+          "status": "ERROR",
+          "error_details": (
+              "Compute project mismatch: expected"
+              f" {settings.compute_project_id}, got {project_id}"
+          ),
+      }
+
     # Get BigQuery client
     bq_client = client.get_bigquery_client(
-        project=project_id, credentials=credentials
+        project=project_id,
+        credentials=credentials,
+        user_agent=settings.application_name,
     )
 
     # BigQuery connection properties where applicable
