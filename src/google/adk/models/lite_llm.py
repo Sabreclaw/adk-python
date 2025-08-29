@@ -575,12 +575,11 @@ def _get_completion_inputs(
     config_dict = llm_request.config.model_dump(exclude_none=True)
     # Generate LiteLlm parameters here,
     # Following https://docs.litellm.ai/docs/completion/input.
-    generation_params = {}
     param_mapping = {
         "max_output_tokens": "max_completion_tokens",
         "stop_sequences": "stop",
     }
-    for key in (
+    keys_to_extract = (
         "temperature",
         "max_output_tokens",
         "top_p",
@@ -588,13 +587,13 @@ def _get_completion_inputs(
         "stop_sequences",
         "presence_penalty",
         "frequency_penalty",
-    ):
-      if key in config_dict:
-        mapped_key = param_mapping.get(key, key)
-        generation_params[mapped_key] = config_dict[key]
-
-    if not generation_params:
-      generation_params = None
+    )
+    
+    generation_params = {
+        param_mapping.get(key, key): config_dict[key]
+        for key in keys_to_extract
+        if key in config_dict
+    } or None
 
   return messages, tools, response_format, generation_params
 
